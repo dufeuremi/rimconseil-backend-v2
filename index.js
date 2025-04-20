@@ -12,7 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
 
 const cors = require('cors');
 app.use(cors());
@@ -41,7 +42,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // limite à 5 MB
+    fileSize: 20 * 1024 * 1024 // 20 MB
   },
   fileFilter: fileFilter
 });
@@ -229,7 +230,12 @@ app.get('/', async (req, res) => {
 app.get('/api/articles', async (req, res) => {
   try {
     const articles = await db.all('SELECT * FROM articles ORDER BY date DESC');
-    res.json(articles);
+    // Parser la colonne category en tableau JSON
+    const articlesWithCategories = articles.map(article => ({
+      ...article,
+      category: article.category ? JSON.parse(article.category) : []
+    }));
+    res.json(articlesWithCategories);
   } catch (error) {
     console.error('Erreur lors de la récupération des articles:', error);
     res.status(500).json({ message: 'Erreur lors de la récupération des articles' });
@@ -243,6 +249,8 @@ app.get('/api/articles/:id', async (req, res) => {
     const article = await db.get('SELECT * FROM articles WHERE id = ?', [id]);
     
     if (article) {
+      // Parser la colonne category en tableau JSON
+      article.category = article.category ? JSON.parse(article.category) : [];
       res.json(article);
     } else {
       res.status(404).json({ message: "Article non trouvé" });
@@ -257,7 +265,7 @@ app.get('/api/articles/:id', async (req, res) => {
 app.post('/api/articles', authenticateJWT, async (req, res) => {
   try {
     console.log('Requête reçue pour créer un article:', req.body);
-    const { date, titre, text_preview, content_json, path } = req.body;
+    const { date, titre, text_preview, content_json, path, category } = req.body;
     
     console.log('Champs extraits:', { date, titre, text_preview, content_json: typeof content_json });
     
@@ -270,8 +278,8 @@ app.post('/api/articles', authenticateJWT, async (req, res) => {
     const contentJsonStr = typeof content_json === 'object' ? JSON.stringify(content_json) : content_json;
     
     const result = await db.run(
-      'INSERT INTO articles (date, titre, text_preview, content_json, path) VALUES (?, ?, ?, ?, ?)',
-      [date, titre, text_preview, contentJsonStr, path || null]
+      'INSERT INTO articles (date, titre, text_preview, content_json, path, category) VALUES (?, ?, ?, ?, ?, ?)',
+      [date, titre, text_preview, contentJsonStr, path || null, category ? JSON.stringify(category) : '[]']
     );
     
     const article = await db.get('SELECT * FROM articles WHERE id = ?', [result.lastID]);
@@ -287,7 +295,7 @@ app.post('/api/articles', authenticateJWT, async (req, res) => {
 app.patch('/api/articles/:id', authenticateJWT, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { date, titre, text_preview, content_json, path } = req.body;
+    const { date, titre, text_preview, content_json, path, category } = req.body;
     
     // Récupérer l'article existant
     const existingArticle = await db.get('SELECT * FROM articles WHERE id = ?', [id]);
@@ -308,12 +316,13 @@ app.patch('/api/articles/:id', authenticateJWT, async (req, res) => {
       titre: titre || existingArticle.titre,
       text_preview: text_preview || existingArticle.text_preview,
       content_json: contentJsonStr,
-      path: path !== undefined ? path : existingArticle.path
+      path: path !== undefined ? path : existingArticle.path,
+      category: category !== undefined ? JSON.stringify(category) : existingArticle.category
     };
     
     const result = await db.run(
-      'UPDATE articles SET date = ?, titre = ?, text_preview = ?, content_json = ?, path = ? WHERE id = ?',
-      [updatedData.date, updatedData.titre, updatedData.text_preview, updatedData.content_json, updatedData.path, id]
+      'UPDATE articles SET date = ?, titre = ?, text_preview = ?, content_json = ?, path = ?, category = ? WHERE id = ?',
+      [updatedData.date, updatedData.titre, updatedData.text_preview, updatedData.content_json, updatedData.path, updatedData.category, id]
     );
     
     if (result.changes > 0) {
@@ -351,7 +360,12 @@ app.delete('/api/articles/:id', authenticateJWT, async (req, res) => {
 app.get('/api/actus', async (req, res) => {
   try {
     const actus = await db.all('SELECT * FROM actus ORDER BY date DESC');
-    res.json(actus);
+    // Parser la colonne category en tableau JSON
+    const actusWithCategories = actus.map(actu => ({
+      ...actu,
+      category: actu.category ? JSON.parse(actu.category) : []
+    }));
+    res.json(actusWithCategories);
   } catch (error) {
     console.error('Erreur lors de la récupération des actus:', error);
     res.status(500).json({ message: 'Erreur lors de la récupération des actus' });
@@ -365,6 +379,8 @@ app.get('/api/actus/:id', async (req, res) => {
     const actu = await db.get('SELECT * FROM actus WHERE id = ?', [id]);
     
     if (actu) {
+      // Parser la colonne category en tableau JSON
+      actu.category = actu.category ? JSON.parse(actu.category) : [];
       res.json(actu);
     } else {
       res.status(404).json({ message: "Actualité non trouvée" });
@@ -378,7 +394,7 @@ app.get('/api/actus/:id', async (req, res) => {
 // POST - Créer une nouvelle actu avec upload d'image
 app.post('/api/actus', authenticateJWT, upload.single('image'), async (req, res) => {
   try {
-    const { date, titre, text_preview, content_json } = req.body;
+    const { date, titre, text_preview, content_json, category } = req.body;
     
     if (!date || !titre || !text_preview || !content_json) {
       // Si une image a été uploadée mais qu'il y a une erreur, on la supprime
@@ -392,8 +408,8 @@ app.post('/api/actus', authenticateJWT, upload.single('image'), async (req, res)
     const img_path = req.file ? `/uploads/${req.file.filename}` : null;
     
     const result = await db.run(
-      'INSERT INTO actus (date, titre, text_preview, content_json, img_path) VALUES (?, ?, ?, ?, ?)',
-      [date, titre, text_preview, content_json, img_path]
+      'INSERT INTO actus (date, titre, text_preview, content_json, img_path, category) VALUES (?, ?, ?, ?, ?, ?)',
+      [date, titre, text_preview, content_json, img_path, category ? JSON.stringify(category) : '[]']
     );
     
     const actu = await db.get('SELECT * FROM actus WHERE id = ?', [result.lastID]);
@@ -413,7 +429,7 @@ app.post('/api/actus', authenticateJWT, upload.single('image'), async (req, res)
 app.patch('/api/actus/:id', authenticateJWT, upload.single('image'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { date, titre, text_preview, content_json } = req.body;
+    const { date, titre, text_preview, content_json, category } = req.body;
     
     // Récupérer l'actu existante
     const existingActu = await db.get('SELECT * FROM actus WHERE id = ?', [id]);
@@ -445,12 +461,13 @@ app.patch('/api/actus/:id', authenticateJWT, upload.single('image'), async (req,
       titre: titre || existingActu.titre,
       text_preview: text_preview || existingActu.text_preview,
       content_json: content_json || existingActu.content_json,
-      img_path: img_path
+      img_path: img_path,
+      category: category !== undefined ? JSON.stringify(category) : existingActu.category
     };
     
     const result = await db.run(
-      'UPDATE actus SET date = ?, titre = ?, text_preview = ?, content_json = ?, img_path = ? WHERE id = ?',
-      [updatedData.date, updatedData.titre, updatedData.text_preview, updatedData.content_json, updatedData.img_path, id]
+      'UPDATE actus SET date = ?, titre = ?, text_preview = ?, content_json = ?, img_path = ?, category = ? WHERE id = ?',
+      [updatedData.date, updatedData.titre, updatedData.text_preview, updatedData.content_json, updatedData.img_path, updatedData.category, id]
     );
     
     if (result.changes > 0) {
@@ -717,12 +734,12 @@ app.post('/api/send-email', authenticateJWT, async (req, res) => {
     
     // Configuration du transporteur email avec SMTP
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // true pour 465, false pour les autres ports
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT) || 465,
+      secure: true, // true pour 465, false pour les autres ports
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.SMTP_USER || process.env.EMAIL_USER,
+        pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
       },
       tls: {
         rejectUnauthorized: false
@@ -731,9 +748,9 @@ app.post('/api/send-email', authenticateJWT, async (req, res) => {
     
     // Configuration du message
     const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: 'remi.dufeu@gmail.com',
-      subject: 'Nouveau message depuis RIM Conseil',
+      from: `"RIM Conseil" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      to: process.env.CONTACT_EMAIL || 'info@rimconseil.fr',
+      subject: 'Panne Signalée - Rimconseil',
       text: texte
     };
     
@@ -782,6 +799,96 @@ app.post('/api/messages', async (req, res) => {
     );
     
     const newMessage = await db.get('SELECT * FROM messages WHERE id = ?', [result.lastID]);
+    
+    // Envoyer un email avec le message formaté
+    try {
+      // Configuration du transporteur email avec SMTP
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT) || 465,
+        secure: true, // true pour 465, false pour les autres ports
+        auth: {
+          user: process.env.SMTP_USER || process.env.EMAIL_USER,
+          pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      
+      // Formater la date pour l'affichage
+      const formattedDate = new Date(date).toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      // Créer le contenu HTML de l'email avec le logo
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Nouveau message de contact</title>
+        </head>
+        <body>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <img src="cid:logo" alt="RIM Conseil Logo" style="max-width: 200px;">
+            </div>
+            <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px;">
+              <h2 style="color: #333; margin-top: 0;">Nouveau message de contact</h2>
+              <p><strong>Date:</strong> ${formattedDate}</p>
+              <p><strong>De:</strong> ${prenom} ${nom}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              ${telephone ? `<p><strong>Téléphone:</strong> ${telephone}</p>` : ''}
+              <p><strong>Sujet:</strong> ${sujet}</p>
+              <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin-top: 15px;">
+                <h3 style="color: #555; margin-top: 0;">Message:</h3>
+                <p style="white-space: pre-line;">${message}</p>
+              </div>
+            </div>
+            <div style="text-align: center; margin-top: 20px; color: #777; font-size: 12px;">
+              <p>Ce message a été envoyé depuis le formulaire de contact du site RIM Conseil.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      // Configuration du message
+      const mailOptions = {
+        from: `"RIM Conseil" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+        to: process.env.CONTACT_EMAIL || 'saiya70@preventth.com',
+        subject: `Nouveau contact - ${sujet}`,
+        text: `
+          Nouveau message de ${prenom} ${nom} (${email})
+          ${telephone ? `Téléphone: ${telephone}` : ''}
+          Sujet: ${sujet}
+          
+          Message:
+          ${message}
+        `,
+        html: htmlContent,
+        attachments: [
+          {
+            filename: 'logo.png',
+            path: path.join(__dirname, 'logo.png'),
+            cid: 'logo' // identifiant utilisé dans l'email HTML
+          }
+        ]
+      };
+      
+      // Envoi de l'email
+      await transporter.sendMail(mailOptions);
+      console.log(`Email de notification envoyé à ${process.env.CONTACT_EMAIL || 'info@rimconseil.fr'}`);
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
+      // On continue même si l'envoi de l'email échoue
+    }
     
     res.status(201).json({
       message: 'Message envoyé avec succès',
