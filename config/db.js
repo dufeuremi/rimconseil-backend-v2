@@ -19,7 +19,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
         titre TEXT NOT NULL,
         text_preview TEXT NOT NULL,
         content_json TEXT NOT NULL,
-        path TEXT
+        path TEXT,
+        img_path TEXT,
+        is_online BOOLEAN DEFAULT 0
       )
     `, (err) => {
       if (err) {
@@ -91,7 +93,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         titre TEXT NOT NULL,
         text_preview TEXT NOT NULL,
         img_path TEXT,
-        content_json TEXT NOT NULL
+        content_json TEXT NOT NULL,
+        is_online BOOLEAN DEFAULT 0
       )
     `, (err) => {
       if (err) {
@@ -293,6 +296,177 @@ const db = new sqlite3.Database(dbPath, (err) => {
         console.error('Erreur lors de la création de la table messages:', err.message);
       } else {
         console.log('Table MESSAGES prête');
+      }
+    });
+    
+    // Créer la table PAGE_CONTENT
+    db.run(`
+      CREATE TABLE IF NOT EXISTS page_content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_name TEXT NOT NULL UNIQUE,
+        content TEXT NOT NULL
+      )
+    `, (err) => {
+      if (err) {
+        console.error('Erreur lors de la création de la table page_content:', err.message);
+      } else {
+        console.log('Table PAGE_CONTENT prête');
+        
+        // Vérifier si la table est vide
+        db.get('SELECT COUNT(*) as count FROM page_content', [], (err, row) => {
+          if (err) {
+            console.error('Erreur lors de la vérification des données:', err.message);
+          } else if (row.count === 0) {
+            // Insérer des données d'exemple
+            const pageContents = [
+              {
+                page_name: 'home',
+                content: JSON.stringify({
+                  blocks: [
+                    {
+                      type: 'heading',
+                      text: 'Bienvenue chez RIM Conseil'
+                    },
+                    {
+                      type: 'paragraph',
+                      text: 'Nous sommes spécialisés dans la transformation digitale des entreprises.'
+                    },
+                    {
+                      type: 'paragraph',
+                      text: 'Découvrez nos services et notre expertise pour accompagner votre évolution numérique.'
+                    }
+                  ]
+                })
+              },
+              {
+                page_name: 'services',
+                content: JSON.stringify({
+                  blocks: [
+                    {
+                      type: 'heading',
+                      text: 'Nos Services'
+                    },
+                    {
+                      type: 'paragraph',
+                      text: 'RIM Conseil propose une gamme complète de services pour votre transformation digitale.'
+                    },
+                    {
+                      type: 'list',
+                      items: [
+                        'Conseil en stratégie digitale',
+                        'Développement d\'applications web et mobile',
+                        'Migration vers le cloud',
+                        'Sécurité informatique',
+                        'Formation et accompagnement'
+                      ]
+                    }
+                  ]
+                })
+              }
+            ];
+            
+            const insertStmt = db.prepare('INSERT INTO page_content (page_name, content) VALUES (?, ?)');
+            
+            pageContents.forEach(pageContent => {
+              insertStmt.run(pageContent.page_name, pageContent.content);
+            });
+            
+            insertStmt.finalize();
+            console.log('Données d\'exemple insérées dans la table PAGE_CONTENT');
+          }
+        });
+      }
+    });
+    
+    // Créer la table EDITABLE_CONTENT pour l'édition WYSIWYG d'éléments individuels
+    db.run(`
+      CREATE TABLE IF NOT EXISTS editable_content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_name TEXT NOT NULL,
+        element_selector TEXT NOT NULL,
+        content_html TEXT NOT NULL,
+        content_text TEXT NOT NULL,
+        element_type TEXT NOT NULL DEFAULT 'paragraph',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(page_name, element_selector)
+      )
+    `, (err) => {
+      if (err) {
+        console.error('Erreur lors de la création de la table editable_content:', err.message);
+      } else {
+        console.log('Table EDITABLE_CONTENT prête');
+        
+        // Vérifier si la table est vide et insérer des données d'exemple
+        db.get('SELECT COUNT(*) as count FROM editable_content', [], (err, row) => {
+          if (err) {
+            console.error('Erreur lors de la vérification des données:', err.message);
+          } else if (row.count === 0) {
+            // Insérer des données d'exemple pour l'édition WYSIWYG
+            const editableContents = [
+              {
+                page_name: 'notre-equipe',
+                element_selector: '.team-intro h2',
+                content_html: '<strong>Notre équipe d\'experts</strong>',
+                content_text: 'Notre équipe d\'experts',
+                element_type: 'title'
+              },
+              {
+                page_name: 'notre-equipe',
+                element_selector: '.team-intro p',
+                content_html: 'Nous sommes une équipe de <em>professionnels passionnés</em> par la <strong>transformation digitale</strong>.',
+                content_text: 'Nous sommes une équipe de professionnels passionnés par la transformation digitale.',
+                element_type: 'paragraph'
+              },
+              {
+                page_name: 'notre-equipe',
+                element_selector: '.team-member-1 .name',
+                content_html: '<strong>Jean Dupont</strong>',
+                content_text: 'Jean Dupont',
+                element_type: 'title'
+              },
+              {
+                page_name: 'notre-equipe',
+                element_selector: '.team-member-1 .bio',
+                content_html: 'Expert en <strong>stratégie digitale</strong> avec plus de 10 ans d\'expérience.',
+                content_text: 'Expert en stratégie digitale avec plus de 10 ans d\'expérience.',
+                element_type: 'bio'
+              },
+              {
+                page_name: 'accueil',
+                element_selector: '.hero-title',
+                content_html: 'Bienvenue chez <strong>RIM Conseil</strong>',
+                content_text: 'Bienvenue chez RIM Conseil',
+                element_type: 'title'
+              },
+              {
+                page_name: 'accueil',
+                element_selector: '.hero-description',
+                content_html: 'Votre partenaire de confiance pour la <em>transformation digitale</em>.',
+                content_text: 'Votre partenaire de confiance pour la transformation digitale.',
+                element_type: 'paragraph'
+              }
+            ];
+            
+            const insertStmt = db.prepare(`
+              INSERT INTO editable_content (page_name, element_selector, content_html, content_text, element_type) 
+              VALUES (?, ?, ?, ?, ?)
+            `);
+            
+            editableContents.forEach(content => {
+              insertStmt.run(
+                content.page_name, 
+                content.element_selector, 
+                content.content_html, 
+                content.content_text, 
+                content.element_type
+              );
+            });
+            
+            insertStmt.finalize();
+            console.log('Données d\'exemple insérées dans la table EDITABLE_CONTENT');
+          }
+        });
       }
     });
   }
