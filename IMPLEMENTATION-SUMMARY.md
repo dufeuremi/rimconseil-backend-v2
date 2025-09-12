@@ -57,18 +57,6 @@ CREATE TABLE editable_content (
 - ✅ Rate limiting (30 requêtes/minute)
 - ✅ Logique UPSERT (INSERT si nouveau, UPDATE si existe)
 
-#### D) DELETE `/api/editable-content/element`
-- ✅ Suppression d'un élément individuel
-- ✅ Authentification JWT requise
-- ✅ Rate limiting (30 requêtes/minute)
-- ✅ Validation des paramètres requis
-
-#### E) DELETE `/api/editable-content/bulk-delete`
-- ✅ Suppression en lot de plusieurs éléments (max 20)
-- ✅ Authentification JWT requise
-- ✅ Rate limiting (30 requêtes/minute)
-- ✅ Gestion des erreurs partielles
-
 ### 4. Fonctions utilitaires de sécurité
 
 #### Sanitisation HTML

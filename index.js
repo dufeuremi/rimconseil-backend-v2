@@ -1581,14 +1581,14 @@ app.post('/api/send-email', authenticateJWT, async (req, res) => {
       return res.status(400).json({ message: 'Le champ texte est requis' });
     }
     
-    // Configuration du transporteur email avec SMTP
+    // Configuration du transporteur email avec SMTP pour Rimconseil
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT) || 465,
+      host: 'smtp.gmail.com',
+      port: 465,
       secure: true, // true pour 465, false pour les autres ports
       auth: {
-        user: process.env.SMTP_USER || process.env.EMAIL_USER,
-        pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
+        user: 'rimconseilrennes@gmail.com',
+        pass: 'mwvp ugtq ttwm uipe' // Mot de passe d'application Gmail
       },
       tls: {
         rejectUnauthorized: false
@@ -1597,8 +1597,8 @@ app.post('/api/send-email', authenticateJWT, async (req, res) => {
     
     // Configuration du message
     const mailOptions = {
-      from: `"RIM Conseil" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
-      to: process.env.CONTACT_EMAIL || 'info@rimconseil.fr',
+      from: `"RIM Conseil" <rimconseilrennes@gmail.com>`,
+      to: 'rimconseilrennes@gmail.com',
       subject: 'Panne Signalée - Rimconseil',
       text: texte
     };
@@ -1651,14 +1651,14 @@ app.post('/api/messages', async (req, res) => {
     
     // Envoyer un email avec le message formaté
     try {
-      // Configuration du transporteur email avec SMTP
+      // Configuration du transporteur email avec SMTP pour Rimconseil
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.SMTP_PORT) || 465,
+        host: 'smtp.gmail.com',
+        port: 465,
         secure: true, // true pour 465, false pour les autres ports
         auth: {
-          user: process.env.SMTP_USER || process.env.EMAIL_USER,
-          pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
+          user: 'rimconseilrennes@gmail.com',
+          pass: 'mwvp ugtq ttwm uipe' // Mot de passe d'application Gmail
         },
         tls: {
           rejectUnauthorized: false
@@ -1710,8 +1710,8 @@ app.post('/api/messages', async (req, res) => {
       
       // Configuration du message
       const mailOptions = {
-        from: `"RIM Conseil" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
-        to: process.env.CONTACT_EMAIL || 'saiya70@preventth.com',
+        from: `"RIM Conseil" <rimconseilrennes@gmail.com>`,
+        to: 'rimconseilrennes@gmail.com',
         subject: `Nouveau contact - ${sujet}`,
         text: `
           Nouveau message de ${prenom} ${nom} (${email})
@@ -1733,7 +1733,7 @@ app.post('/api/messages', async (req, res) => {
       
       // Envoi de l'email
       await transporter.sendMail(mailOptions);
-      console.log(`Email de notification envoyé à ${process.env.CONTACT_EMAIL || 'info@rimconseil.fr'}`);
+      console.log(`Email de notification envoyé à rimconseilrennes@gmail.com`);
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de l\'email de notification:', emailError);
       // On continue même si l'envoi de l'email échoue
@@ -2110,189 +2110,6 @@ app.patch('/api/editable-content/element', authenticateJWT, rateLimitEditing, as
     console.error('❌ Erreur lors de la mise à jour de l\'élément:', error);
     res.status(500).json({ 
       message: 'Erreur lors de la mise à jour de l\'élément',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// DELETE - Supprimer un élément individuel
-app.delete('/api/editable-content/element', authenticateJWT, rateLimitEditing, async (req, res) => {
-  try {
-    const { page_name, element_selector } = req.body;
-    
-    // Validation des champs obligatoires
-    if (!page_name || !element_selector) {
-      return res.status(400).json({ 
-        message: 'Les champs page_name et element_selector sont requis' 
-      });
-    }
-    
-    // Validation du sélecteur CSS
-    if (!isValidCSSSelector(element_selector)) {
-      return res.status(400).json({ 
-        message: 'Sélecteur CSS invalide ou potentiellement dangereux' 
-      });
-    }
-    
-    // Vérifier si l'élément existe
-    const existingElement = await db.get(
-      'SELECT id FROM editable_content WHERE page_name = ? AND element_selector = ?',
-      [page_name, element_selector]
-    );
-    
-    if (!existingElement) {
-      return res.status(404).json({ message: 'Élément non trouvé' });
-    }
-    
-    // Supprimer l'élément
-    const result = await db.run(
-      'DELETE FROM editable_content WHERE page_name = ? AND element_selector = ?',
-      [page_name, element_selector]
-    );
-    
-    if (result.changes > 0) {
-      // Log de l'activité
-      console.log(`🗑️  Élément supprimé par ${req.user.email}: ${page_name} > ${element_selector}`);
-      
-      res.json({
-        message: 'Élément supprimé avec succès',
-        deletedElement: {
-          page_name,
-          element_selector,
-          id: existingElement.id
-        }
-      });
-    } else {
-      res.status(404).json({ message: 'Élément non trouvé' });
-    }
-    
-  } catch (error) {
-    console.error('❌ Erreur lors de la suppression de l\'élément:', error);
-    res.status(500).json({ 
-      message: 'Erreur lors de la suppression de l\'élément',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// DELETE - Suppression en lot (bulk delete) de plusieurs éléments
-app.delete('/api/editable-content/bulk-delete', authenticateJWT, rateLimitEditing, async (req, res) => {
-  try {
-    const { elements } = req.body;
-    
-    // Validation des données
-    if (!elements || !Array.isArray(elements)) {
-      return res.status(400).json({ 
-        message: 'Le champ "elements" doit être un tableau' 
-      });
-    }
-    
-    if (elements.length === 0) {
-      return res.status(400).json({ 
-        message: 'Le tableau "elements" ne peut pas être vide' 
-      });
-    }
-    
-    if (elements.length > 20) {
-      return res.status(400).json({ 
-        message: 'Maximum 20 éléments peuvent être supprimés en une fois' 
-      });
-    }
-    
-    const deletedElements = [];
-    const errors = [];
-    
-    // Traiter chaque élément
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-      const { page_name, element_selector } = element;
-      
-      try {
-        // Validation des champs obligatoires
-        if (!page_name || !element_selector) {
-          errors.push({
-            index: i,
-            error: 'Les champs page_name et element_selector sont requis',
-            element: element
-          });
-          continue;
-        }
-        
-        // Validation du sélecteur CSS
-        if (!isValidCSSSelector(element_selector)) {
-          errors.push({
-            index: i,
-            error: 'Sélecteur CSS invalide ou potentiellement dangereux',
-            element: element
-          });
-          continue;
-        }
-        
-        // Vérifier si l'élément existe
-        const existingElement = await db.get(
-          'SELECT id FROM editable_content WHERE page_name = ? AND element_selector = ?',
-          [page_name, element_selector]
-        );
-        
-        if (!existingElement) {
-          errors.push({
-            index: i,
-            error: 'Élément non trouvé',
-            element: element
-          });
-          continue;
-        }
-        
-        // Supprimer l'élément
-        const result = await db.run(
-          'DELETE FROM editable_content WHERE page_name = ? AND element_selector = ?',
-          [page_name, element_selector]
-        );
-        
-        if (result.changes > 0) {
-          deletedElements.push({
-            page_name,
-            element_selector,
-            id: existingElement.id
-          });
-        } else {
-          errors.push({
-            index: i,
-            error: 'Élément non trouvé',
-            element: element
-          });
-        }
-        
-      } catch (elementError) {
-        console.error(`❌ Erreur lors de la suppression de l'élément ${i}:`, elementError);
-        errors.push({
-          index: i,
-          error: 'Erreur lors de la suppression de cet élément',
-          element: element
-        });
-      }
-    }
-    
-    // Log de l'activité
-    console.log(`🗑️  Bulk delete par l'utilisateur ${req.user.email}: ${deletedElements.length} éléments supprimés, ${errors.length} erreurs`);
-    
-    const statusCode = deletedElements.length > 0 ? (errors.length > 0 ? 207 : 200) : 400;
-    
-    res.status(statusCode).json({
-      message: `${deletedElements.length} élément(s) supprimé(s) avec succès`,
-      deletedElements: deletedElements,
-      errors: errors.length > 0 ? errors : undefined,
-      summary: {
-        totalRequested: elements.length,
-        deleted: deletedElements.length,
-        errors: errors.length
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Erreur lors de la suppression en lot:', error);
-    res.status(500).json({ 
-      message: 'Erreur lors de la suppression en lot',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
