@@ -2123,6 +2123,327 @@ app.get('/api/user/me', authenticateJWT, async (req, res) => {
   res.json(req.user);
 });
 
+// ===== ROUTES POUR LA GESTION DES SCÈNES 3D =====
+
+// GET - Récupérer toutes les scènes 3D
+app.get('/api/scenes-3d', async (req, res) => {
+  try {
+    console.log('🎬 Récupération des scènes 3D');
+    
+    const scenes = await db.all(`
+      SELECT s.*, 
+             COUNT(sm.model_id) as model_count
+      FROM scenes_3d s
+      LEFT JOIN scene_models sm ON s.id = sm.scene_id
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+    `);
+    
+    // Parser les configurations JSON
+    scenes.forEach(scene => {
+      try {
+        scene.scene_config = JSON.parse(scene.scene_config);
+      } catch (err) {
+        scene.scene_config = {};
+      }
+    });
+    
+    console.log(`✅ ${scenes.length} scènes 3D récupérées`);
+    res.json({
+      message: 'Scènes 3D récupérées avec succès',
+      data: scenes,
+      total: scenes.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des scènes 3D:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération des scènes 3D',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET - Récupérer une scène 3D spécifique avec ses modèles
+app.get('/api/scenes-3d/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`🎬 Récupération de la scène 3D ID: ${id}`);
+    
+    // Récupérer la scène
+    const scene = await db.get('SELECT * FROM scenes_3d WHERE id = ?', [id]);
+    
+    if (!scene) {
+      return res.status(404).json({ message: 'Scène 3D non trouvée' });
+    }
+    
+    // Parser la configuration de la scène
+    try {
+      scene.scene_config = JSON.parse(scene.scene_config);
+    } catch (err) {
+      scene.scene_config = {};
+    }
+    
+    // Récupérer les modèles associés à cette scène
+    const models = await db.all(`
+      SELECT m.*, sm.position_x, sm.position_y, sm.position_z,
+             sm.rotation_x, sm.rotation_y, sm.rotation_z,
+             sm.scale_x, sm.scale_y, sm.scale_z
+      FROM models_3d m
+      INNER JOIN scene_models sm ON m.id = sm.model_id
+      WHERE sm.scene_id = ?
+    `, [id]);
+    
+    // Parser les configurations des modèles
+    models.forEach(model => {
+      try {
+        model.model_config = JSON.parse(model.model_config);
+      } catch (err) {
+        model.model_config = {};
+      }
+    });
+    
+    scene.models = models;
+    
+    console.log(`✅ Scène 3D récupérée avec ${models.length} modèles`);
+    res.json({
+      message: 'Scène 3D récupérée avec succès',
+      data: scene
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération de la scène 3D:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération de la scène 3D',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET - Récupérer les scènes par type d'ammunition
+app.get('/api/scenes-3d/ammunition/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    console.log(`🎬 Récupération des scènes pour le type d'ammunition: ${type}`);
+    
+    const scenes = await db.all(`
+      SELECT s.*, 
+             COUNT(sm.model_id) as model_count
+      FROM scenes_3d s
+      LEFT JOIN scene_models sm ON s.id = sm.scene_id
+      WHERE s.ammunition_type = ?
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+    `, [type]);
+    
+    // Parser les configurations JSON
+    scenes.forEach(scene => {
+      try {
+        scene.scene_config = JSON.parse(scene.scene_config);
+      } catch (err) {
+        scene.scene_config = {};
+      }
+    });
+    
+    console.log(`✅ ${scenes.length} scènes trouvées pour le type ${type}`);
+    res.json({
+      message: `Scènes 3D pour le type ${type} récupérées avec succès`,
+      data: scenes,
+      total: scenes.length,
+      ammunition_type: type
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des scènes par type:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération des scènes par type',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET - Récupérer tous les modèles 3D
+app.get('/api/models-3d', async (req, res) => {
+  try {
+    console.log('🎯 Récupération des modèles 3D');
+    
+    const models = await db.all('SELECT * FROM models_3d ORDER BY ammunition_type, name');
+    
+    // Parser les configurations JSON
+    models.forEach(model => {
+      try {
+        model.model_config = JSON.parse(model.model_config);
+      } catch (err) {
+        model.model_config = {};
+      }
+    });
+    
+    console.log(`✅ ${models.length} modèles 3D récupérés`);
+    res.json({
+      message: 'Modèles 3D récupérés avec succès',
+      data: models,
+      total: models.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des modèles 3D:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération des modèles 3D',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET - Récupérer les modèles par type d'ammunition
+app.get('/api/models-3d/ammunition/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    console.log(`🎯 Récupération des modèles pour le type d'ammunition: ${type}`);
+    
+    const models = await db.all('SELECT * FROM models_3d WHERE ammunition_type = ? ORDER BY name', [type]);
+    
+    // Parser les configurations JSON
+    models.forEach(model => {
+      try {
+        model.model_config = JSON.parse(model.model_config);
+      } catch (err) {
+        model.model_config = {};
+      }
+    });
+    
+    console.log(`✅ ${models.length} modèles trouvés pour le type ${type}`);
+    res.json({
+      message: `Modèles 3D pour le type ${type} récupérés avec succès`,
+      data: models,
+      total: models.length,
+      ammunition_type: type
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des modèles par type:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la récupération des modèles par type',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST - Créer une nouvelle scène 3D (authentification requise)
+app.post('/api/scenes-3d', authenticateJWT, async (req, res) => {
+  try {
+    console.log('🎬 Création d\'une nouvelle scène 3D');
+    console.log('📋 Body reçu:', req.body);
+    
+    const { name, description, ammunition_type, scene_config } = req.body;
+    
+    // Validation des champs obligatoires
+    if (!name || !ammunition_type || !scene_config) {
+      return res.status(400).json({ 
+        message: 'Les champs name, ammunition_type et scene_config sont obligatoires',
+        missing: {
+          name: !name,
+          ammunition_type: !ammunition_type,
+          scene_config: !scene_config
+        }
+      });
+    }
+    
+    // Conversion et validation du scene_config
+    let sceneConfigStr;
+    try {
+      sceneConfigStr = typeof scene_config === 'object' ? JSON.stringify(scene_config) : scene_config;
+      // Vérifier que c'est un JSON valide
+      JSON.parse(sceneConfigStr);
+    } catch (jsonError) {
+      return res.status(400).json({ 
+        message: 'Le champ scene_config doit être un JSON valide' 
+      });
+    }
+    
+    // Insertion en base de données
+    const result = await db.run(
+      'INSERT INTO scenes_3d (name, description, ammunition_type, scene_config) VALUES (?, ?, ?, ?)',
+      [name, description, ammunition_type, sceneConfigStr]
+    );
+    
+    // Récupération de la scène créée
+    const scene = await db.get('SELECT * FROM scenes_3d WHERE id = ?', [result.lastID]);
+    
+    // Parser la configuration pour la réponse
+    try {
+      scene.scene_config = JSON.parse(scene.scene_config);
+    } catch (err) {
+      scene.scene_config = {};
+    }
+    
+    console.log('✅ Scène 3D créée avec succès');
+    res.status(201).json({
+      message: 'Scène 3D créée avec succès',
+      data: scene
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la création de la scène 3D:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la création de la scène 3D',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST - Ajouter un modèle à une scène (authentification requise)
+app.post('/api/scenes-3d/:sceneId/models/:modelId', authenticateJWT, async (req, res) => {
+  try {
+    const { sceneId, modelId } = req.params;
+    const { position_x = 0, position_y = 0, position_z = 0, 
+            rotation_x = 0, rotation_y = 0, rotation_z = 0,
+            scale_x = 1, scale_y = 1, scale_z = 1 } = req.body;
+    
+    console.log(`🎬 Ajout du modèle ${modelId} à la scène ${sceneId}`);
+    
+    // Vérifier que la scène existe
+    const scene = await db.get('SELECT * FROM scenes_3d WHERE id = ?', [sceneId]);
+    if (!scene) {
+      return res.status(404).json({ message: 'Scène 3D non trouvée' });
+    }
+    
+    // Vérifier que le modèle existe
+    const model = await db.get('SELECT * FROM models_3d WHERE id = ?', [modelId]);
+    if (!model) {
+      return res.status(404).json({ message: 'Modèle 3D non trouvé' });
+    }
+    
+    // Ajouter le modèle à la scène
+    const result = await db.run(
+      `INSERT OR REPLACE INTO scene_models 
+       (scene_id, model_id, position_x, position_y, position_z, 
+        rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sceneId, modelId, position_x, position_y, position_z, 
+       rotation_x, rotation_y, rotation_z, scale_x, scale_y, scale_z]
+    );
+    
+    console.log('✅ Modèle ajouté à la scène avec succès');
+    res.status(201).json({
+      message: 'Modèle ajouté à la scène avec succès',
+      data: {
+        scene_id: sceneId,
+        model_id: modelId,
+        position: { x: position_x, y: position_y, z: position_z },
+        rotation: { x: rotation_x, y: rotation_y, z: rotation_z },
+        scale: { x: scale_x, y: scale_y, z: scale_z }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de l\'ajout du modèle à la scène:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de l\'ajout du modèle à la scène',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`Serveur démarré sur le port ${PORT}`);

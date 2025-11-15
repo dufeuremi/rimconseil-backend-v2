@@ -1,0 +1,55 @@
+# Modèle 3D pour roquette
+# Format OBJ pour amu_rocket
+# Ce fichier contient la géométrie de base pour une roquette
+
+# Corps principal de la roquette
+v -0.3 -0.1 -0.1
+v 0.8 -0.1 -0.1
+v 0.8 0.1 -0.1
+v -0.3 0.1 -0.1
+v -0.3 -0.1 0.1
+v 0.8 -0.1 0.1
+v 0.8 0.1 0.1
+v -0.3 0.1 0.1
+
+# Ogive (tête de la roquette)
+v 0.8 -0.1 -0.1
+v 1.2 0.0 -0.1
+v 0.8 0.1 -0.1
+v 0.8 -0.1 0.1
+v 1.2 0.0 0.1
+v 0.8 0.1 0.1
+
+# Empennage (ailes stabilisatrices)
+v -0.3 -0.2 -0.05
+v -0.1 -0.2 -0.05
+v -0.1 0.2 -0.05
+v -0.3 0.2 -0.05
+v -0.3 -0.2 0.05
+v -0.1 -0.2 0.05
+v -0.1 0.2 0.05
+v -0.3 0.2 0.05
+
+# Faces du corps principal
+f 1 2 3 4
+f 5 8 7 6
+f 1 5 6 2
+f 2 6 7 3
+f 3 7 8 4
+f 5 1 4 8
+
+# Faces de l'ogive
+f 9 10 11
+f 12 15 14
+f 9 12 14 10
+f 10 14 15 11
+f 11 15 12 9
+
+# Faces de l'empennage
+f 16 17 18 19
+f 20 23 22 21
+f 16 20 21 17
+f 17 21 22 18
+f 18 22 23 19
+f 20 16 19 23
+
